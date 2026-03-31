@@ -1,0 +1,121 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Distributed Image Processing Pipeline with Step Functions and Rekognition
+
+##########################################################################
+# GLOBAL CONFIGURATION
+##########################################################################
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+    Runtime: nodejs20.x
+    Architectures:
+      - x86_64
+    Tracing: Active # Enable X-Ray on ALL Lambdas
+    Environment:
+      Variables:
+        POWERTOOLS_SERVICE_NAME: image-pipeline
+        LOG_LEVEL: INFO
+
+##########################################################################
+# PARAMETERS
+##########################################################################
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - prod
+    Description: Environment name (dev or prod)
+
+##########################################################################
+# RESOURCES
+##########################################################################
+Resources:
+  ##########################################################################
+  # S3 BUCKETS
+  ##########################################################################
+
+  # Uploads bucket - stores original images
+  UploadsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-uploads-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      NotificationConfiguration:
+        EventBridgeConfiguration:
+          EventBridgeEnabled: true
+
+  # Processed bucket - stores resized images
+  ProcessedBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "${AWS::StackName}-processed-${Environment}"
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+
+  ##########################################################################
+  # DYNAMODB TABLE
+  ##########################################################################
+
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "${AWS::StackName}-results-${Environment}"
+      BillingMode: PAY_PER_REQUEST
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      AttributeDefinitions:
+        - AttributeName: imageId
+          AttributeType: S
+        - AttributeName: processingType
+          AttributeType: S
+      KeySchema:
+        - AttributeName: imageId
+          KeyType: HASH
+        - AttributeName: processingType
+          KeyType: RANGE
+
+  ##########################################################################
+  # PLACEHOLDER - Functions will be added in later phases
+  ##########################################################################
+
+  # Phase 1: Presigned URL Lambda
+  # Phase 4: Rekognition Lambdas
+  # Phase 5: Image Resize Lambda
+  # Phase 6: Aggregator Lambda
+  # Phase 8: Notification Lambda
+  # Phase 9: Query API Lambda
+
+##########################################################################
+# OUTPUTS
+##########################################################################
+Outputs:
+  UploadsBucketName:
+    Description: S3 bucket for image uploads
+    Value: !Ref UploadsBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-UploadsBucket"
+
+  ProcessedBucketName:
+    Description: S3 bucket for processed images
+    Value: !Ref ProcessedBucket
+    Export:
+      Name: !Sub "${AWS::StackName}-ProcessedBucket"
+
+  ResultsTableName:
+    Description: DynamoDB table for processing results
+    Value: !Ref ResultsTable
+    Export:
+      Name: !Sub "${AWS::StackName}-ResultsTable"
