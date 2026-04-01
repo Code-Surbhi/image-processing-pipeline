@@ -1,0 +1,7 @@
+{
+  "name": "image-resize-lambda",
+  "version": "1.0.0",
+  "description": "Resize images into multiple dimensions",
+  "main": "index.js",
+  "type": "module"
+}

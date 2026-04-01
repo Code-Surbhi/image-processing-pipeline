@@ -1,22 +1,216 @@
 {
-  "Comment": "Image Processing Pipeline - Skeleton (Phase 2)",
-  "StartAt": "LogEvent",
+  "Comment": "Image Processing Pipeline - Parallel Processing",
+  "StartAt": "ExtractS3Info",
   "States": {
-    "LogEvent": {
+    "ExtractS3Info": {
       "Type": "Pass",
-      "Comment": "Placeholder state - logs the S3 event and succeeds",
+      "Comment": "Extract bucket, key, and imageId from EventBridge event",
       "Parameters": {
-        "message": "Image processing pipeline triggered!",
         "bucket.$": "$.detail.bucket.name",
         "key.$": "$.detail.object.key",
-        "imageId.$": "States.ArrayGetItem(States.StringSplit($.detail.object.key, '/'), 1)"
+        "imageId.$": "States.ArrayGetItem(States.StringSplit($.detail.object.key, '/'), 1)",
+        "imageIdWithExt.$": "States.ArrayGetItem(States.StringSplit($.detail.object.key, '/'), 1)",
+        "size.$": "$.detail.object.size"
       },
-      "ResultPath": "$.pipelineInfo",
-      "Next": "Success"
+      "ResultPath": "$.s3Info",
+      "Next": "PrepareInput"
     },
-    "Success": {
-      "Type": "Succeed",
-      "Comment": "Pipeline skeleton complete"
+    "PrepareInput": {
+      "Type": "Pass",
+      "Comment": "Prepare input for parallel branches",
+      "Parameters": {
+        "bucket.$": "$.s3Info.bucket",
+        "key.$": "$.s3Info.key",
+        "imageId.$": "States.ArrayGetItem(States.StringSplit($.s3Info.imageIdWithExt, '.'), 0)"
+      },
+      "Next": "ParallelProcessing"
+    },
+    "ParallelProcessing": {
+      "Type": "Parallel",
+      "Comment": "Execute all 3 processing branches concurrently",
+      "Branches": [
+        {
+          "StartAt": "DetectLabels",
+          "States": {
+            "DetectLabels": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${RekognitionLabelsFunctionArn}",
+                "Payload": {
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key",
+                  "imageId.$": "$.imageId"
+                }
+              },
+              "ResultSelector": {
+                "imageId.$": "$.Payload.imageId",
+                "processingType.$": "$.Payload.processingType",
+                "labels.$": "$.Payload.labels",
+                "timestamp.$": "$.Payload.timestamp"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error",
+                  "Next": "LabelsError"
+                }
+              ],
+              "End": true
+            },
+            "LabelsError": {
+              "Type": "Pass",
+              "Comment": "Return error info for labels branch",
+              "Result": {
+                "processingType": "LABELS",
+                "status": "FAILED",
+                "error": "Labels detection failed"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "DetectFaces",
+          "States": {
+            "DetectFaces": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${RekognitionFacesFunctionArn}",
+                "Payload": {
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key",
+                  "imageId.$": "$.imageId"
+                }
+              },
+              "ResultSelector": {
+                "imageId.$": "$.Payload.imageId",
+                "processingType.$": "$.Payload.processingType",
+                "faces.$": "$.Payload.faces",
+                "faceCount.$": "$.Payload.faceCount",
+                "timestamp.$": "$.Payload.timestamp"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error",
+                  "Next": "FacesError"
+                }
+              ],
+              "End": true
+            },
+            "FacesError": {
+              "Type": "Pass",
+              "Comment": "Return error info for faces branch",
+              "Result": {
+                "processingType": "FACES",
+                "status": "FAILED",
+                "error": "Face detection failed"
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "ResizeImage",
+          "States": {
+            "ResizeImage": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "${ImageResizeFunctionArn}",
+                "Payload": {
+                  "bucket.$": "$.bucket",
+                  "key.$": "$.key",
+                  "imageId.$": "$.imageId"
+                }
+              },
+              "ResultSelector": {
+                "imageId.$": "$.Payload.imageId",
+                "processingType.$": "$.Payload.processingType",
+                "resizedImages.$": "$.Payload.resizedImages",
+                "timestamp.$": "$.Payload.timestamp"
+              },
+              "Retry": [
+                {
+                  "ErrorEquals": [
+                    "Lambda.ServiceException",
+                    "Lambda.TooManyRequestsException"
+                  ],
+                  "IntervalSeconds": 2,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 2
+                }
+              ],
+              "Catch": [
+                {
+                  "ErrorEquals": ["States.ALL"],
+                  "ResultPath": "$.error",
+                  "Next": "ResizeError"
+                }
+              ],
+              "End": true
+            },
+            "ResizeError": {
+              "Type": "Pass",
+              "Comment": "Return error info for resize branch",
+              "Result": {
+                "processingType": "RESIZE",
+                "status": "FAILED",
+                "error": "Image resize failed"
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "AggregateResults"
+    },
+    "AggregateResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "${AggregatorFunctionArn}",
+        "Payload.$": "$"
+      },
+      "ResultSelector": {
+        "result.$": "$.Payload"
+      },
+      "Retry": [
+        {
+          "ErrorEquals": [
+            "Lambda.ServiceException",
+            "Lambda.TooManyRequestsException"
+          ],
+          "IntervalSeconds": 2,
+          "MaxAttempts": 3,
+          "BackoffRate": 2
+        }
+      ],
+      "End": true
     }
   }
 }

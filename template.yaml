@@ -123,6 +123,73 @@ Resources:
             Method: POST
             RestApiId: !Ref ImagePipelineApi
 
+  # Rekognition Labels Lambda
+  RekognitionLabelsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-rekognition-labels-${Environment}"
+      CodeUri: src/rekognition-labels/
+      Handler: index.handler
+      Description: Detects labels in images using AWS Rekognition
+      Environment:
+        Variables:
+          UPLOADS_BUCKET_NAME: !Ref UploadsBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadsBucket
+        - RekognitionDetectOnlyPolicy: {}
+
+  # Rekognition Faces Lambda
+  RekognitionFacesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-rekognition-faces-${Environment}"
+      CodeUri: src/rekognition-faces/
+      Handler: index.handler
+      Description: Detects faces in images using AWS Rekognition
+      Environment:
+        Variables:
+          UPLOADS_BUCKET_NAME: !Ref UploadsBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadsBucket
+        - RekognitionDetectOnlyPolicy: {}
+
+  # Image Resize Lambda
+  ImageResizeFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-image-resize-${Environment}"
+      CodeUri: src/image-resize/
+      Handler: index.handler
+      Description: Resizes images into multiple dimensions
+      Timeout: 60
+      MemorySize: 1024
+      Environment:
+        Variables:
+          UPLOADS_BUCKET_NAME: !Ref UploadsBucket
+          PROCESSED_BUCKET_NAME: !Ref ProcessedBucket
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref UploadsBucket
+        - S3CrudPolicy:
+            BucketName: !Ref ProcessedBucket
+
+  # Aggregator Lambda
+  AggregatorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-aggregator-${Environment}"
+      CodeUri: src/aggregator/
+      Handler: index.handler
+      Description: Aggregates results from parallel processing branches
+      Environment:
+        Variables:
+          RESULTS_TABLE_NAME: !Ref ResultsTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ResultsTable
+
   ##########################################################################
   # API GATEWAY
   ##########################################################################
@@ -151,12 +218,24 @@ Resources:
         UploadsBucketName: !Ref UploadsBucket
         ProcessedBucketName: !Ref ProcessedBucket
         ResultsTableName: !Ref ResultsTable
+        RekognitionLabelsFunctionArn: !GetAtt RekognitionLabelsFunction.Arn
+        RekognitionFacesFunctionArn: !GetAtt RekognitionFacesFunction.Arn
+        ImageResizeFunctionArn: !GetAtt ImageResizeFunction.Arn
+        AggregatorFunctionArn: !GetAtt AggregatorFunction.Arn
       Tracing:
-        Enabled: true # Enable X-Ray tracing
+        Enabled: true
       Policies:
         - CloudWatchLogsFullAccess
         - AWSXRayDaemonWriteAccess
-      Type: STANDARD # Standard workflow (not Express)
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RekognitionLabelsFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref RekognitionFacesFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref ImageResizeFunction
+        - LambdaInvokePolicy:
+            FunctionName: !Ref AggregatorFunction
+      Type: STANDARD
       Logging:
         Level: ALL
         IncludeExecutionData: true
