@@ -1,0 +1,22 @@
+{
+  "Comment": "Image Processing Pipeline - Skeleton (Phase 2)",
+  "StartAt": "LogEvent",
+  "States": {
+    "LogEvent": {
+      "Type": "Pass",
+      "Comment": "Placeholder state - logs the S3 event and succeeds",
+      "Parameters": {
+        "message": "Image processing pipeline triggered!",
+        "bucket.$": "$.detail.bucket.name",
+        "key.$": "$.detail.object.key",
+        "imageId.$": "States.ArrayGetItem(States.StringSplit($.detail.object.key, '/'), 1)"
+      },
+      "ResultPath": "$.pipelineInfo",
+      "Next": "Success"
+    },
+    "Success": {
+      "Type": "Succeed",
+      "Comment": "Pipeline skeleton complete"
+    }
+  }
+}

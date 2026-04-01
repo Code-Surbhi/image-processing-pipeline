@@ -138,6 +138,91 @@ Resources:
         AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
         AllowOrigin: "'*'"
 
+  ##########################################################################
+  # STEP FUNCTIONS STATE MACHINE
+  ##########################################################################
+
+  ImageProcessingStateMachine:
+    Type: AWS::Serverless::StateMachine
+    Properties:
+      Name: !Sub "${AWS::StackName}-pipeline-${Environment}"
+      DefinitionUri: statemachine/pipeline.asl.json
+      DefinitionSubstitutions:
+        UploadsBucketName: !Ref UploadsBucket
+        ProcessedBucketName: !Ref ProcessedBucket
+        ResultsTableName: !Ref ResultsTable
+      Tracing:
+        Enabled: true # Enable X-Ray tracing
+      Policies:
+        - CloudWatchLogsFullAccess
+        - AWSXRayDaemonWriteAccess
+      Type: STANDARD # Standard workflow (not Express)
+      Logging:
+        Level: ALL
+        IncludeExecutionData: true
+        Destinations:
+          - CloudWatchLogsLogGroup:
+              LogGroupArn: !GetAtt StateMachineLogGroup.Arn
+
+  # CloudWatch Log Group for Step Functions
+  StateMachineLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/vendedlogs/states/${AWS::StackName}-pipeline-${Environment}"
+      RetentionInDays: 7
+
+  ##########################################################################
+  # EVENTBRIDGE RULE
+  ##########################################################################
+
+  S3UploadRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub "${AWS::StackName}-s3-upload-rule-${Environment}"
+      Description: Trigger Step Functions when image is uploaded to S3
+      EventBusName: default
+      EventPattern:
+        source:
+          - aws.s3
+        detail-type:
+          - Object Created
+        detail:
+          bucket:
+            name:
+              - !Ref UploadsBucket
+          object:
+            key:
+              - prefix: uploads/
+      State: ENABLED
+      Targets:
+        - Id: ImageProcessingStateMachineTarget
+          Arn: !GetAtt ImageProcessingStateMachine.Arn
+          RoleArn: !GetAtt EventBridgeStepFunctionsRole.Arn
+          RetryPolicy:
+            MaximumRetryAttempts: 2
+            MaximumEventAgeInSeconds: 3600
+
+  # IAM Role for EventBridge to invoke Step Functions
+  EventBridgeStepFunctionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeStateMachine
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !GetAtt ImageProcessingStateMachine.Arn
+
 ##########################################################################
 # OUTPUTS
 ##########################################################################
@@ -169,3 +254,13 @@ Outputs:
   PresignedUrlEndpoint:
     Description: Endpoint to request presigned upload URLs
     Value: !Sub "https://${ImagePipelineApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload-url"
+
+  PipelineStateMachineArn:
+    Description: Step Functions State Machine ARN
+    Value: !GetAtt ImageProcessingStateMachine.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-StateMachineArn"
+
+  PipelineStateMachineName:
+    Description: Step Functions State Machine Name
+    Value: !GetAtt ImageProcessingStateMachine.Name
