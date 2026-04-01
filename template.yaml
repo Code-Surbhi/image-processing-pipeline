@@ -42,7 +42,7 @@ Resources:
   UploadsBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-uploads-${Environment}"
+      BucketName: !Sub "${AWS::StackName}-uploads-${Environment}-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -53,12 +53,22 @@ Resources:
       NotificationConfiguration:
         EventBridgeConfiguration:
           EventBridgeEnabled: true
+      CorsConfiguration:
+        CorsRules:
+          - AllowedHeaders:
+              - "*"
+            AllowedMethods:
+              - PUT
+              - POST
+            AllowedOrigins:
+              - "*"
+            MaxAge: 3600
 
   # Processed bucket - stores resized images
   ProcessedBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub "${AWS::StackName}-processed-${Environment}"
+      BucketName: !Sub "${AWS::StackName}-processed-${Environment}-${AWS::AccountId}"
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -88,15 +98,45 @@ Resources:
           KeyType: RANGE
 
   ##########################################################################
-  # PLACEHOLDER - Functions will be added in later phases
+  # LAMBDA FUNCTIONS
   ##########################################################################
 
-  # Phase 1: Presigned URL Lambda
-  # Phase 4: Rekognition Lambdas
-  # Phase 5: Image Resize Lambda
-  # Phase 6: Aggregator Lambda
-  # Phase 8: Notification Lambda
-  # Phase 9: Query API Lambda
+  # Presigned URL Generator
+  PresignedUrlFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-presigned-url-${Environment}"
+      CodeUri: src/presigned-url/
+      Handler: index.handler
+      Description: Generates S3 presigned URLs for image uploads
+      Environment:
+        Variables:
+          UPLOADS_BUCKET_NAME: !Ref UploadsBucket
+      Policies:
+        - S3CrudPolicy:
+            BucketName: !Ref UploadsBucket
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /upload-url
+            Method: POST
+            RestApiId: !Ref ImagePipelineApi
+
+  ##########################################################################
+  # API GATEWAY
+  ##########################################################################
+
+  ImagePipelineApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub "${AWS::StackName}-api-${Environment}"
+      StageName: !Ref Environment
+      TracingEnabled: true # Enable X-Ray on API Gateway
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
 
 ##########################################################################
 # OUTPUTS
@@ -119,3 +159,13 @@ Outputs:
     Value: !Ref ResultsTable
     Export:
       Name: !Sub "${AWS::StackName}-ResultsTable"
+
+  ApiEndpoint:
+    Description: API Gateway endpoint URL
+    Value: !Sub "https://${ImagePipelineApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+    Export:
+      Name: !Sub "${AWS::StackName}-ApiEndpoint"
+
+  PresignedUrlEndpoint:
+    Description: Endpoint to request presigned upload URLs
+    Value: !Sub "https://${ImagePipelineApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload-url"

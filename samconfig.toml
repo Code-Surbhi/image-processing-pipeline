@@ -2,6 +2,7 @@ version = 0.1
 
 [default.global.parameters]
 stack_name = "image-pipeline"
+region = "ap-south-1"
 
 [default.build.parameters]
 cached = true
@@ -12,7 +13,9 @@ capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
 region = "ap-south-1"
-parameter_overrides = "Environment=dev"
+parameter_overrides = "Environment=\"dev\""
+s3_prefix = "image-pipeline"
+image_repositories = []
 
 [prod.deploy.parameters]
 capabilities = "CAPABILITY_IAM"
