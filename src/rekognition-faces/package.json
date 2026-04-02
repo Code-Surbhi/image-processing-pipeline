@@ -3,5 +3,8 @@
   "version": "1.0.0",
   "description": "Detect faces in images using AWS Rekognition",
   "main": "index.js",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.702.0"
+  }
 }
