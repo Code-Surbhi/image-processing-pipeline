@@ -99,7 +99,7 @@ This project demonstrates:
 3rd Year CSE Student | Chitkara University  
 AWS Certified Cloud Practitioner | AWS Certified AI Practitioner
 
-Building for campus placements June 2026 🎯
+Building for Knowledge 🎯
 
 ## 📄 License
 
