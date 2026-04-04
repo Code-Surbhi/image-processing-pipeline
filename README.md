@@ -3,6 +3,9 @@
 A production-grade serverless image processing system demonstrating distributed systems patterns, AI integration, and observability best practices.
 
 [![Deploy to AWS](https://github.com/Code-Surbhi/image-processing-pipeline/actions/workflows/deploy.yml/badge.svg)](https://github.com/Code-Surbhi/image-processing-pipeline/actions/workflows/deploy.yml)
+![AWS](https://img.shields.io/badge/AWS-Cloud-orange?logo=amazon-aws)
+![Node.js](https://img.shields.io/badge/Node.js-20.x-green?logo=node.js)
+![License](https://img.shields.io/badge/License-MIT-blue)
 
 ## 📖 Table of Contents
 
@@ -23,289 +26,517 @@ A production-grade serverless image processing system demonstrating distributed 
 
 ## 🎯 Overview
 
-This project implements a high-throughput async image processing pipeline that:
+This project implements a **high-throughput async image processing pipeline** that demonstrates production-grade distributed systems architecture on AWS.
 
-1. **Accepts image uploads** via S3 presigned URLs (no Lambda proxy bottleneck)
+### What It Does
+
+1. **Accepts image uploads** via S3 presigned URLs (bypasses API Gateway 10MB limit)
 2. **Triggers distributed processing** via EventBridge → Step Functions
 3. **Processes in parallel** using 3 concurrent branches:
-   - AWS Rekognition object/scene detection
-   - AWS Rekognition face detection with emotions
-   - Image resizing to 3 sizes (thumbnail, medium, large)
-4. **Aggregates results** and stores in DynamoDB
-5. **Provides REST API** to query processing results
-6. **Monitors end-to-end** with X-Ray tracing and CloudWatch dashboards
+   - 🔍 AWS Rekognition object/scene detection
+   - 👤 AWS Rekognition face detection with emotions, age, gender
+   - 📐 Image resizing to 3 sizes (thumbnail, medium, large) using sharp
+4. **Aggregates results** and stores in DynamoDB with TTL
+5. **Provides REST API** to query processing results by imageId
+6. **Monitors end-to-end** with X-Ray distributed tracing and CloudWatch dashboards
 
-**Why this project stands out:** Most AWS projects are CRUD apps or simple Lambdas. This demonstrates distributed systems thinking — fan-out parallelism, async processing, event-driven architecture, and production observability.
+### Why This Project Stands Out
+
+Most AWS portfolio projects are simple CRUD applications or single-Lambda functions. **This project demonstrates:**
+
+✅ **Distributed systems thinking** - Fan-out parallelism, async processing, event-driven architecture  
+✅ **Production patterns** - Retry logic, error handling, idempotency, observability  
+✅ **Cost optimization** - S3 lifecycle policies, Intelligent-Tiering, right-sized Lambda memory  
+✅ **CI/CD automation** - GitHub Actions with trunk-based development  
+✅ **Performance analysis** - Load testing, bottleneck identification, optimization recommendations
 
 ## 🏗️ Architecture
 
+### High-Level Flow
+
 ```
-User → Presigned URL → S3 → EventBridge → Step Functions (Parallel)
-                                              ├─ Rekognition Labels
-                                              ├─ Rekognition Faces
-                                              └─ Image Resize (sharp)
-                                                    ↓
-                                              Aggregator → DynamoDB
-                                                           ↓ Stream
-                                                    Notification Lambda
-Query API ← DynamoDB ← User
+┌─────────────────── UPLOAD & PROCESSING (Write Path) ───────────────────┐
+│                                                                          │
+│  User → API Gateway → Presigned URL Lambda → S3 Uploads Bucket          │
+│                                                  ↓                       │
+│                                            EventBridge                   │
+│                                                  ↓                       │
+│                                         Step Functions                   │
+│                                     (3 Parallel Branches)                │
+│                          ┌──────────────┼──────────────┐                │
+│                          ↓              ↓              ↓                │
+│                   Rekognition    Rekognition     Image Resize           │
+│                     Labels         Faces           Lambda               │
+│                     Lambda        Lambda       (Sharp library)          │
+│                          │              │              │                │
+│                          └──────────────┴──────────────┘                │
+│                                         ↓                                │
+│                                  Aggregator Lambda                       │
+│                                         ↓                                │
+│                                    DynamoDB Table                        │
+│                              (4 items per image: LABELS,                 │
+│                               FACES, RESIZE, AGGREGATED)                 │
+│                                         ↓                                │
+│                                  DynamoDB Stream                         │
+│                                         ↓                                │
+│                                 Notification Lambda                      │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────────── QUERY (Read Path) ────────────────────────────────┐
+│                                                                          │
+│  User → API Gateway → Query API Lambda → DynamoDB → Return Results      │
+│         GET /results/{imageId}                                           │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
+
+┌────────────────── OBSERVABILITY LAYER ──────────────────────────────────┐
+│                                                                          │
+│  X-Ray Tracing  |  CloudWatch Logs  |  CloudWatch Dashboard  |  Alarms  │
+│                                                                          │
+└──────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Full architecture details:** [docs/architecture.md](docs/architecture.md)
+**📄 Full architecture details:** [docs/architecture.md](docs/architecture.md)
+
+### Key Components
+
+| Component            | Technology                | Purpose                         |
+| -------------------- | ------------------------- | ------------------------------- |
+| **Upload API**       | API Gateway + Lambda      | Generate presigned S3 URLs      |
+| **Event Bus**        | Amazon EventBridge        | Trigger processing on S3 upload |
+| **Orchestrator**     | AWS Step Functions        | Coordinate 3 parallel branches  |
+| **AI Analysis**      | AWS Rekognition           | Detect objects, scenes, faces   |
+| **Image Processing** | Lambda + Sharp Layer      | Resize to 3 dimensions          |
+| **Data Storage**     | DynamoDB + S3             | Store results and images        |
+| **Notifications**    | DynamoDB Streams + Lambda | Processing completion alerts    |
+| **Query API**        | API Gateway + Lambda      | Retrieve results by imageId     |
+| **Observability**    | X-Ray + CloudWatch        | Distributed tracing & metrics   |
+| **CI/CD**            | GitHub Actions + SAM      | Automated deployment            |
 
 ## ✨ Features
 
 ### Core Functionality
 
-- ✅ **Presigned URL generation** for direct S3 uploads (avoids API Gateway 10MB limit)
-- ✅ **AI-powered image analysis** via AWS Rekognition (zero ML code)
-- ✅ **Parallel processing** with Step Functions (3 branches run simultaneously)
-- ✅ **High-performance image resizing** using sharp library (4-5x faster than alternatives)
-- ✅ **Event-driven architecture** with EventBridge (loose coupling)
-- ✅ **REST API** for querying results by imageId
+- ✅ **Presigned URL generation** - Direct S3 uploads (no 10MB API Gateway limit)
+- ✅ **AI-powered analysis** - Zero ML code, powered by AWS Rekognition
+- ✅ **True parallelism** - Step Functions Parallel state (not sequential)
+- ✅ **High-performance resizing** - Sharp library (4-5x faster than ImageMagick)
+- ✅ **Event-driven** - Loose coupling via EventBridge
+- ✅ **RESTful API** - Clean query interface by imageId
 
 ### Production Patterns
 
-- ✅ **Distributed tracing** with AWS X-Ray across entire pipeline
-- ✅ **Error handling** with automatic retries and exponential backoff
-- ✅ **Idempotency** via DynamoDB conditional writes
-- ✅ **Cost optimization** with S3 lifecycle policies and Intelligent-Tiering
-- ✅ **Real-time notifications** via DynamoDB Streams
-- ✅ **CloudWatch dashboard** with custom metrics and alarms
-- ✅ **CI/CD pipeline** with GitHub Actions (auto-deploy on push to main)
+- ✅ **Distributed tracing** - AWS X-Ray across all 7 Lambda functions
+- ✅ **Automatic retries** - Exponential backoff in Step Functions
+- ✅ **Idempotent writes** - DynamoDB conditional expressions
+- ✅ **Cost optimization** - S3 lifecycle → Glacier, Intelligent-Tiering
+- ✅ **Real-time events** - DynamoDB Streams for notifications
+- ✅ **Observability** - CloudWatch dashboard, alarms, SNS alerts
+- ✅ **Automated deployment** - CI/CD on every push to main
+- ✅ **Data lifecycle** - TTL auto-deletes old data after 90 days
 
 ## 🛠️ Tech Stack
 
-| Category             | Technologies                                         |
-| -------------------- | ---------------------------------------------------- |
-| **Orchestration**    | AWS Step Functions (Standard Workflow)               |
-| **Compute**          | AWS Lambda (Node.js 20.x, 7 functions)               |
-| **Storage**          | Amazon S3 (uploads + processed buckets), DynamoDB    |
-| **AI/ML**            | AWS Rekognition (DetectLabels, DetectFaces)          |
-| **Observability**    | AWS X-Ray, CloudWatch Logs/Metrics/Dashboards/Alarms |
-| **Event Bus**        | Amazon EventBridge                                   |
-| **API**              | Amazon API Gateway (REST API)                        |
-| **IaC**              | AWS SAM (CloudFormation)                             |
-| **CI/CD**            | GitHub Actions                                       |
-| **Image Processing** | sharp (libvips) via Lambda Layer                     |
+| Category                   | Technologies                                              |
+| -------------------------- | --------------------------------------------------------- |
+| **Orchestration**          | AWS Step Functions (Standard Workflow)                    |
+| **Compute**                | AWS Lambda (Node.js 20.x) - 7 functions                   |
+| **Storage**                | Amazon S3 (2 buckets), Amazon DynamoDB                    |
+| **AI/ML**                  | AWS Rekognition (DetectLabels, DetectFaces)               |
+| **Observability**          | AWS X-Ray, CloudWatch (Logs, Metrics, Dashboards, Alarms) |
+| **Event Processing**       | Amazon EventBridge, DynamoDB Streams                      |
+| **API**                    | Amazon API Gateway (REST API)                             |
+| **Infrastructure as Code** | AWS SAM (Serverless Application Model)                    |
+| **CI/CD**                  | GitHub Actions                                            |
+| **Image Processing**       | Sharp 0.33.x (libvips) via Lambda Layer                   |
+| **Version Control**        | Git (Trunk-based development)                             |
 
 ## 📚 Key Learning Outcomes
 
-### Distributed Systems
+### Distributed Systems Concepts
 
-- Fan-out parallelism with Step Functions Parallel state
-- Event-driven architecture with loose coupling
-- Async processing vs synchronous request-response
-- Idempotency and retry patterns
+- **Fan-out parallelism** with Step Functions Parallel state
+- **Event-driven architecture** with loose coupling via EventBridge
+- **Async processing** vs synchronous request-response patterns
+- **Idempotency** via DynamoDB conditional writes
+- **Retry strategies** with exponential backoff
 
 ### AWS Services (Developer Associate Level)
 
-- Step Functions state machine design (ASL)
-- EventBridge event patterns and filtering
-- DynamoDB single-table design with composite keys
-- S3 lifecycle policies and storage classes
-- Lambda Layers for native dependencies
-- X-Ray service maps and trace analysis
+- **Step Functions** - State machine design in Amazon States Language (ASL)
+- **EventBridge** - Event patterns, filtering, cross-service integration
+- **DynamoDB** - Single-table design, composite keys, Streams, TTL
+- **S3** - Lifecycle policies, storage classes, presigned URLs, event notifications
+- **Lambda** - Layers for native dependencies, memory/CPU tuning, concurrency
+- **X-Ray** - Service maps, trace analysis, distributed debugging
+- **CloudWatch** - Custom dashboards, alarms, log insights
 
 ### Production Engineering
 
-- CI/CD with trunk-based development
-- Cost optimization strategies
-- CloudWatch observability (not just logging)
-- Performance testing and bottleneck identification
-- Infrastructure as Code with SAM
+- **CI/CD** with trunk-based development (deploy on every commit)
+- **Cost optimization** strategies (storage tiers, right-sizing)
+- **Performance testing** and bottleneck identification
+- **Observability** (not just logging, but metrics + traces + dashboards)
+- **Infrastructure as Code** with declarative templates
 
 ## 📊 Performance
 
-**Load test results (6 concurrent uploads):**
+### Load Test Results (6 concurrent uploads)
 
-| Metric                  | Value                                |
-| ----------------------- | ------------------------------------ |
-| **Upload throughput**   | 0.29 uploads/second                  |
-| **Processing time**     | ~3.2 seconds per image               |
-| **Success rate**        | 100% (6/6)                           |
-| **Lambda auto-scaling** | Instant (no throttling)              |
-| **Bottleneck**          | Image Resize Lambda (~2 seconds avg) |
+| Metric                    | Value                                |
+| ------------------------- | ------------------------------------ |
+| **Success rate**          | 100% (6/6 succeeded)                 |
+| **Processing time**       | ~3.2 seconds per image               |
+| **Upload throughput**     | 0.29 uploads/second                  |
+| **Lambda auto-scaling**   | Instant (no throttling)              |
+| **Bottleneck identified** | Image Resize Lambda (~2 seconds avg) |
 
-**Cost per image:** ~$0.0021 (Rekognition API calls are 95% of cost)
+### Performance Breakdown
 
-**Details:** [docs/performance-analysis.md](docs/performance-analysis.md)
+| Lambda Function    | Avg Duration | Bottleneck? |
+| ------------------ | ------------ | ----------- |
+| Presigned URL      | 50ms         | ❌ No       |
+| Rekognition Labels | 1,500ms      | ⚠️ Moderate |
+| Rekognition Faces  | 1,200ms      | ⚠️ Moderate |
+| **Image Resize**   | **2,000ms**  | ✅ **Yes**  |
+| Aggregator         | 200ms        | ❌ No       |
+
+**Optimization opportunity:** Increase Image Resize Lambda memory from 1024MB → 1792MB (gets full vCPU, estimated 30% speed improvement)
+
+**📄 Full performance analysis:** [docs/performance-analysis.md](docs/performance-analysis.md)
 
 ## 💰 Cost Analysis
 
-**Monthly cost at 10,000 images/month:**
+### Monthly Cost at 10,000 Images
 
-- Rekognition: $20 (2 API calls × $0.001 per image × 10,000)
-- Lambda: $0.15 (4 invocations × avg 1.5s × 1024MB)
-- Step Functions: $0.25 (10,000 executions)
-- DynamoDB: <$0.10 (on-demand, 40,000 writes)
-- S3: <$0.50 (storage + requests)
-- **Total: ~$21/month** or **$0.0021 per image**
+| Service                         | Cost           | Percentage |
+| ------------------------------- | -------------- | ---------- |
+| Rekognition (2 API calls/image) | $20.00         | 95%        |
+| Lambda (4 functions/image)      | $0.15          | 1%         |
+| Step Functions                  | $0.25          | 1%         |
+| DynamoDB (on-demand)            | $0.10          | <1%        |
+| S3 (storage + requests)         | $0.50          | 2%         |
+| **Total**                       | **~$21/month** | **100%**   |
 
-**Free Tier covers:**
+**Per-image cost:** ~$0.0021 (0.2 cents)
 
-- First 5,000 Rekognition images/month for 12 months
-- 1M Lambda requests/month forever
-- 4,000 Step Functions state transitions/month forever
+### Free Tier Coverage
+
+✅ **Rekognition:** First 5,000 images/month free for 12 months → Saves $10/month  
+✅ **Lambda:** 1M requests/month free forever → Exceeds our usage  
+✅ **Step Functions:** 4,000 transitions/month free forever → Exceeds our usage  
+✅ **DynamoDB:** 25 GB storage + 200M requests/month free forever → Exceeds our usage
+
+### Cost Optimization Strategies
+
+1. **S3 Lifecycle Policies** - Move uploads to Glacier after 30 days (84% storage cost reduction)
+2. **Intelligent-Tiering** - Auto-optimize processed images based on access patterns
+3. **DynamoDB TTL** - Auto-delete old data after 90 days (no storage cost for old items)
+4. **Lambda memory tuning** - Right-size based on actual usage patterns
 
 ## 🚀 Getting Started
 
 ### Prerequisites
 
-- AWS Account
-- AWS CLI configured
-- SAM CLI installed
+```bash
+# Required
+- AWS Account (with Rekognition service access)
+- AWS CLI configured with credentials
+- SAM CLI installed (brew install aws-sam-cli or pip install aws-sam-cli)
 - Node.js 20.x
-- Docker (for building Lambda Layers)
+- Docker Desktop (for building Lambda Layers)
+
+# Optional
+- PowerShell 7+ (for Windows test scripts)
+```
 
 ### Quick Deploy
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/Code-Surbhi/image-processing-pipeline.git
 cd image-processing-pipeline
 
-# Build
+# 2. Build (includes Docker build for Sharp layer)
 sam build --use-container
 
-# Deploy
+# 3. Deploy (interactive prompts for configuration)
 sam deploy --guided
+
+# Follow prompts:
+# - Stack name: image-pipeline
+# - AWS Region: ap-south-1 (or your preferred region)
+# - Environment: dev
+# - Confirm changes: Y
+# - Allow SAM CLI IAM role creation: Y
+# - Disable rollback: N
+# - Save arguments to configuration file: Y
 ```
 
 ### Test the Pipeline
 
 ```powershell
-# Upload an image
+# Navigate to test scripts
 cd tests
-.\upload-real-image.ps1 -ImagePath "your-image.jpg"
 
-# Query results (wait 10 seconds for processing)
-.\query-results.ps1 -ImageId "your-image-id"
+# 1. Upload a single image
+.\upload-real-image.ps1 -ImagePath "your-cat-photo.jpg"
+# Returns: { imageId: "abc-123-...", uploadUrl: "https://..." }
+
+# 2. Wait 10 seconds for processing to complete
+
+# 3. Query results
+.\query-results.ps1 -ImageId "abc-123-..."
+# Returns: { labels: [...], faces: [...], resizedImages: [...] }
 ```
 
 ## 📁 Project Structure
 
 ```
 image-processing-pipeline/
-├── src/                          # Lambda functions
-│   ├── presigned-url/            # Generate S3 presigned URLs
-│   ├── rekognition-labels/       # Object detection
-│   ├── rekognition-faces/        # Face detection
-│   ├── image-resize/             # Resize to 3 sizes
-│   ├── aggregator/               # Merge results → DynamoDB
-│   ├── notification/             # DynamoDB Stream trigger
-│   └── query-api/                # REST API for results
-├── layers/                       # Lambda Layers
-│   └── sharp-layer/              # Sharp library (Linux binaries)
-├── statemachine/                 # Step Functions definition
-│   └── pipeline.asl.json         # Amazon States Language
-├── tests/                        # Test scripts
-│   ├── upload-real-image.ps1     # Single upload
-│   ├── query-results.ps1         # Query by imageId
-│   └── load-test.ps1             # Concurrent uploads
-├── docs/                         # Documentation
-│   ├── architecture.md           # Architecture diagram
-│   ├── performance-analysis.md   # Load test results
-│   └── interview-prep.md         # Q&A for placements
-├── .github/workflows/            # CI/CD
-│   └── deploy.yml                # GitHub Actions
-├── template.yaml                 # SAM template (IaC)
-└── README.md
+├── src/                              # Lambda function source code
+│   ├── presigned-url/                # Generate S3 presigned URLs
+│   │   ├── index.js                  # Main handler
+│   │   └── package.json              # Dependencies: @aws-sdk/s3-request-presigner
+│   ├── rekognition-labels/           # Object/scene detection
+│   │   ├── index.js                  # Calls Rekognition DetectLabels
+│   │   └── package.json              # Dependencies: @aws-sdk/client-rekognition
+│   ├── rekognition-faces/            # Face detection
+│   │   ├── index.js                  # Calls Rekognition DetectFaces
+│   │   └── package.json              # Dependencies: @aws-sdk/client-rekognition
+│   ├── image-resize/                 # Image resizing (bottleneck)
+│   │   ├── index.js                  # Sharp processing + S3 uploads
+│   │   └── package.json              # Dependencies: @aws-sdk/client-s3, sharp (via layer)
+│   ├── aggregator/                   # Merge parallel results
+│   │   ├── index.js                  # Writes 4 items to DynamoDB
+│   │   └── package.json              # Dependencies: @aws-sdk/lib-dynamodb
+│   ├── notification/                 # DynamoDB Stream consumer
+│   │   ├── index.js                  # Processes AGGREGATED items only
+│   │   └── package.json              # Dependencies: @aws-sdk/lib-dynamodb
+│   └── query-api/                    # REST API for results
+│       ├── index.js                  # Queries DynamoDB by imageId
+│       └── package.json              # Dependencies: @aws-sdk/lib-dynamodb
+├── layers/                           # Lambda Layers
+│   └── sharp-layer/                  # Sharp library (native C++ binaries)
+│       ├── Dockerfile                # Build for Lambda Linux x86_64
+│       └── nodejs/
+│           └── package.json          # sharp@0.33.5
+├── statemachine/                     # Step Functions definition
+│   └── pipeline.asl.json             # Amazon States Language (ASL)
+├── tests/                            # PowerShell test scripts
+│   ├── upload-real-image.ps1         # Single image upload
+│   ├── query-results.ps1             # Query by imageId
+│   └── load-test.ps1                 # Concurrent uploads (load testing)
+├── docs/                             # Documentation
+│   ├── architecture.md               # Detailed architecture diagram
+│   ├── performance-analysis.md       # Load test results
+│   └── interview-prep.md             # Q&A for placements
+├── .github/
+│   └── workflows/
+│       └── deploy.yml                # GitHub Actions CI/CD
+├── template.yaml                     # SAM template (Infrastructure as Code)
+├── samconfig.toml                    # SAM deployment configuration
+└── README.md                         # This file
 ```
 
 ## 🔄 Deployment
 
-### Automated (CI/CD)
+### Automated CI/CD (Recommended)
 
-Every push to `main` triggers GitHub Actions:
+Every push to `main` branch triggers GitHub Actions:
 
-1. SAM validate (lint template)
-2. SAM build (in Docker container)
-3. SAM deploy (to AWS)
+1. ✅ Checkout code
+2. ✅ Setup Node.js 20 + Python 3.12 + SAM CLI
+3. ✅ Configure AWS credentials (from GitHub Secrets)
+4. ✅ SAM validate (lint CloudFormation template)
+5. ✅ SAM build --use-container (Docker build for Sharp layer)
+6. ✅ SAM deploy --no-confirm-changeset (automated deployment)
+7. ✅ Output API endpoints
 
-### Manual
+**Setup:**
+
+1. Create IAM user `github-actions-deploy` with AdministratorAccess
+2. Add AWS credentials to GitHub Secrets:
+   - `AWS_ACCESS_KEY_ID`
+   - `AWS_SECRET_ACCESS_KEY`
+   - `AWS_REGION`
+3. Push to `main` → Auto-deploy! 🚀
+
+### Manual Deployment
 
 ```bash
+# Clean build (if needed)
+rm -rf .aws-sam
+
+# Build
 sam build --use-container
+
+# Deploy to dev
 sam deploy
+
+# Deploy to prod (separate stack)
+sam deploy --config-env prod --parameter-overrides Environment=prod
 ```
 
 ## 🧪 Testing
 
+### Unit Testing (Single Upload)
+
 ```powershell
-# Single upload
 cd tests
-.\upload-real-image.ps1 -ImagePath "sample.jpg"
 
-# Load test (10 concurrent)
-.\load-test.ps1 -ImageCount 10 -ImagePath "sample.jpg"
+# Upload image
+.\upload-real-image.ps1 -ImagePath "sample-cat.jpg"
 
-# Query results
-.\query-results.ps1 -ImageId "your-uuid-here"
+# Sample output:
+# ✅ Upload successful!
+# Image ID: 4ba6c8d4-94d3-4d21-9378-cc7c61d9a53a
+# Processing started...
+
+# Query results (wait 10 seconds)
+.\query-results.ps1 -ImageId "4ba6c8d4-94d3-4d21-9378-cc7c61d9a53a"
+
+# Sample output:
+# ✅ Results found!
+# Labels Detected: 6 (Cat, Abyssinian, Mammal, Animal, Pet, Manx)
+# Faces Detected: 0
+# Resized Images: 3 (thumbnail, medium, large)
+```
+
+### Load Testing (Concurrent Uploads)
+
+```powershell
+# Test with 10 concurrent uploads
+.\load-test.ps1 -ImageCount 10 -ImagePath "sample-cat.jpg"
+
+# Sample output:
+# 🚀 Load Test Starting...
+# ⏳ Waiting for all uploads to complete...
+# ✅ Load Test Complete!
+# Results:
+#   Total uploads: 10
+#   Successful: 6
+#   Failed: 4 (file locking on Windows)
+#   Duration: 20.9 seconds
+#   Throughput: 0.29 uploads/second
 ```
 
 ## 📈 Monitoring
 
-### X-Ray Service Map
+### AWS X-Ray Service Map
 
-- **AWS Console** → **X-Ray** → **Service map**
-- Shows: Request flow, latency, errors, dependencies
-- Use for: Bottleneck identification, distributed tracing
+**Purpose:** Visualize distributed architecture and request flow
+
+**Access:** AWS Console → X-Ray → Service map
+
+**What you'll see:**
+
+- Complete request trace from API Gateway → Lambda → S3 → EventBridge → Step Functions → 4 parallel Lambdas → Rekognition/S3/DynamoDB
+- Average latency per service
+- Error rates
+- Service dependencies
+
+**Use for:** Bottleneck identification, performance debugging
 
 ### CloudWatch Dashboard
 
-- **AWS Console** → **CloudWatch** → **Dashboards** → `image-pipeline-dev`
-- Shows: Step Functions executions, Lambda metrics, DynamoDB throughput, API Gateway traffic
-- Use for: Health monitoring, capacity planning
+**Purpose:** Real-time metrics visualization
+
+**Access:** AWS Console → CloudWatch → Dashboards → `image-pipeline-dev`
+
+**Widgets:**
+
+1. **Step Functions Executions** - Started/Succeeded/Failed over time
+2. **Lambda Invocations & Errors** - All 7 functions aggregated
+3. **Lambda Duration** - Average and maximum execution times
+4. **DynamoDB Capacity** - Read/Write capacity units consumed
+5. **API Gateway Requests** - Request count, 4XX/5XX errors
+
+**Use for:** Health monitoring, capacity planning, incident investigation
 
 ### CloudWatch Alarms
 
-- **Step Functions failures** (threshold: 1 failure)
-- **Aggregator error rate** (threshold: >5%)
-- **Rekognition slow duration** (threshold: >10s avg)
+**Configured Alarms:**
 
-## 🎓 Interview Prep
+| Alarm                   | Metric           | Threshold        | Action    |
+| ----------------------- | ---------------- | ---------------- | --------- |
+| Step Functions Failures | ExecutionsFailed | ≥ 1 failure      | SNS email |
+| Aggregator Errors       | Lambda Errors    | > 5% error rate  | SNS email |
+| Rekognition Slow        | Lambda Duration  | > 10 seconds avg | SNS email |
 
-This project demonstrates answers to common AWS interview questions:
+**Setup:** Confirm SNS email subscription after first deployment
 
-**System Design:**
+<!-- ## 🎓 Interview Prep
+
+This project helps you answer **50+ common AWS interview questions**, including:
+
+### System Design
 
 - "Design an image processing pipeline that handles 10,000 uploads/minute"
 - "How would you add video processing to this system?"
 - "What happens if the Rekognition API is down?"
+- "How would you implement real-time processing status updates?"
 
-**AWS-Specific:**
+### AWS-Specific
 
-- "Why Step Functions instead of chaining Lambdas?"
-- "What is the difference between Step Functions Standard and Express?"
+- "Why Step Functions instead of chaining Lambdas with SNS?"
+- "What is the difference between Step Functions Standard and Express workflows?"
 - "How does X-Ray help debug distributed systems?"
-- "What is a DynamoDB Stream and why use it?"
+- "What is a DynamoDB Stream and when should you use it?"
+- "Explain the trade-offs between S3 event notifications and EventBridge"
 
-**Cost/Scaling:**
+### Cost & Scaling
 
-- "How much does this cost at 1,000 images/day?"
-- "What would you change to handle 10x the load?"
+- "How much does this cost at 1,000 images/day? 100,000/day?"
+- "What changes would you make to handle 10x the current load?"
+- "How would you reduce the cost by 50%?"
+- "What's the Lambda concurrency limit and how does it affect scalability?"
 
-**Full Q&A:** [docs/interview-prep.md](docs/interview-prep.md)
+### Performance
+
+- "How would you identify the bottleneck in this pipeline?"
+- "Why is Image Resize Lambda slower than Rekognition Lambda?"
+- "What's the impact of increasing Lambda memory from 1024MB to 1792MB?"
+
+**📄 Full Q&A with detailed answers:** [docs/interview-prep.md](docs/interview-prep.md) -->
 
 ## 👤 Author
 
 **Surbhi**  
-3rd Year CSE Student | Chitkara University  
-AWS Certified Cloud Practitioner | AWS Certified AI Practitioner
+3rd Year Computer Science Engineering | Chitkara University
+
+**AWS Certifications:**
+
+- ✅ AWS Certified Cloud Practitioner
+- ✅ AWS Certified AI Practitioner
+- 🎯 Preparing for: AWS Certified Developer Associate (Exam: June 2026)
+
+<!-- **Project Context:**
+Built as second AWS project for campus placements (June 2026). First project: Serverless URL Shortener with custom domain. -->
 
 **Contact:**
 
-- GitHub: [@Code-Surbhi](https://github.com/Code-Surbhi)
-- LinkedIn: [Your LinkedIn]
-- Email: [Your Email]
-
-**Built for:** Campus placements June 2026
+- 🐙 GitHub: [@Code-Surbhi](https://github.com/Code-Surbhi)
+- 💼 LinkedIn: [www.linkedin.com/in/code-surbhi]
+- 📧 Email: [code.surbhi1712@gmail.com]
 
 ## 📄 License
 
-MIT License - feel free to use this project for learning!
+MIT License - Feel free to use this project for learning and interviews!
 
 ---
 
-⭐ **Star this repo if it helped you learn AWS!**
+## 🌟 Acknowledgments
+
+- **AWS SAM Team** - Excellent IaC framework
+- **Sharp Team** - Best-in-class image processing library
+- **AWS Documentation** - Comprehensive and well-maintained
+
+---
+
+⭐ **If this project helped you learn AWS, please star this repo!**
+
+💡 **Questions?** Open an issue - I'm happy to help!
+
+🚀 **Hiring?** This project demonstrates my ability to build production-grade distributed systems on AWS.
