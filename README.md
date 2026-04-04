@@ -21,8 +21,8 @@ A production-grade serverless image processing system demonstrating distributed 
 - [Deployment](#deployment)
 - [Testing](#testing)
 - [Monitoring](#monitoring)
-<!-- - [Interview Prep](#interview-prep) -->
 - [Author](#author)
+<!-- - [Interview Prep](#interview-prep) -->
 
 ## 🎯 Overview
 
