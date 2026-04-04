@@ -271,6 +271,191 @@ Resources:
             RestApiId: !Ref ImagePipelineApi
 
   ##########################################################################
+  # SNS TOPIC FOR ALARMS
+  ##########################################################################
+
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub "${AWS::StackName}-alarms-${Environment}"
+      DisplayName: Image Pipeline Alarms
+      Subscription:
+        - Endpoint: itssurbee@gmail.com # Replace with your email
+          Protocol: email
+
+  ##########################################################################
+  # CLOUDWATCH ALARMS
+  ##########################################################################
+
+  # Alarm: Step Functions execution failures
+  StepFunctionsFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-step-functions-failures-${Environment}"
+      AlarmDescription: Alert when Step Functions executions fail
+      MetricName: ExecutionsFailed
+      Namespace: AWS/States
+      Statistic: Sum
+      Period: 300 # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 1 # Alert if any execution fails
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: StateMachineArn
+          Value: !GetAtt ImageProcessingStateMachine.Arn
+      AlarmActions:
+        - !Ref AlarmTopic
+      TreatMissingData: notBreaching
+
+  # Alarm: High error rate in Aggregator Lambda
+  AggregatorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-aggregator-errors-${Environment}"
+      AlarmDescription: Alert when Aggregator Lambda error rate >5%
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2 # Must breach for 2 consecutive periods
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref AggregatorFunction
+      AlarmActions:
+        - !Ref AlarmTopic
+      TreatMissingData: notBreaching
+
+  # Alarm: Rekognition Labels Lambda duration >10 seconds
+  RekognitionLabelsDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "${AWS::StackName}-rekognition-labels-slow-${Environment}"
+      AlarmDescription: Alert when Rekognition Labels Lambda is slow
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Average
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10000 # 10 seconds in milliseconds
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RekognitionLabelsFunction
+      AlarmActions:
+        - !Ref AlarmTopic
+      TreatMissingData: notBreaching
+
+  ##########################################################################
+  # CLOUDWATCH DASHBOARD
+  ##########################################################################
+
+  PipelineDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub "${AWS::StackName}-${Environment}"
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/States", "ExecutionsFailed", { "stat": "Sum", "label": "Failed", "color": "#d62728" } ],
+                  [ ".", "ExecutionsSucceeded", { "stat": "Sum", "label": "Succeeded", "color": "#2ca02c" } ],
+                  [ ".", "ExecutionsStarted", { "stat": "Sum", "label": "Started", "color": "#1f77b4" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Step Functions Executions",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", { "stat": "Sum", "label": "Invocations" } ],
+                  [ ".", "Errors", { "stat": "Sum", "label": "Errors", "color": "#d62728" } ],
+                  [ ".", "Throttles", { "stat": "Sum", "label": "Throttles", "color": "#ff7f0e" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "All Lambda Functions - Invocations & Errors",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Duration", { "stat": "Average", "label": "Avg Duration" } ],
+                  [ "...", { "stat": "Maximum", "label": "Max Duration", "color": "#d62728" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "Lambda Duration (All Functions)",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "label": "Milliseconds",
+                    "min": 0
+                  }
+                }
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/DynamoDB", "ConsumedReadCapacityUnits", { "stat": "Sum" } ],
+                  [ ".", "ConsumedWriteCapacityUnits", { "stat": "Sum" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "DynamoDB Capacity Units",
+                "period": 300
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  [ "AWS/ApiGateway", "Count", { "stat": "Sum", "label": "Requests" } ],
+                  [ ".", "4XXError", { "stat": "Sum", "label": "4XX Errors", "color": "#ff7f0e" } ],
+                  [ ".", "5XXError", { "stat": "Sum", "label": "5XX Errors", "color": "#d62728" } ]
+                ],
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${AWS::Region}",
+                "title": "API Gateway",
+                "period": 300,
+                "yAxis": {
+                  "left": {
+                    "min": 0
+                  }
+                }
+              }
+            }
+          ]
+        }
+
+  ##########################################################################
   # API GATEWAY
   ##########################################################################
 
