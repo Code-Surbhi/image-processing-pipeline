@@ -9,20 +9,20 @@ A production-grade serverless image processing system demonstrating distributed 
 
 ## 📖 Table of Contents
 
-- [Overview](#overview)
-- [Architecture](#architecture)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Key Learning Outcomes](#key-learning-outcomes)
-- [Performance](#performance)
-- [Cost Analysis](#cost-analysis)
-- [Getting Started](#getting-started)
-- [Project Structure](#project-structure)
-- [Deployment](#deployment)
-- [Testing](#testing)
-- [Monitoring](#monitoring)
-- [Author](#author)
-<!-- - [Interview Prep](#interview-prep) -->
+- [Overview](##overview)
+- [Architecture](##architecture)
+- [Features](##features)
+- [Tech Stack](##tech-stack)
+- [Key Learning Outcomes](##key-learning-outcomes)
+- [Performance](##performance)
+- [Cost Analysis](##cost-analysis)
+- [Getting Started](##getting-started)
+- [Project Structure](##project-structure)
+- [Deployment](##deployment)
+- [Testing](##testing)
+- [Monitoring](##monitoring)
+- [Author](##author)
+<!-- - [Interview Prep](##interview-prep) -->
 
 ## 🎯 Overview
 
