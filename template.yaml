@@ -206,6 +206,31 @@ Resources:
         - DynamoDBCrudPolicy:
             TableName: !Ref ResultsTable
 
+  # Notification Lambda (DynamoDB Stream trigger)
+  NotificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-notification-${Environment}"
+      CodeUri: src/notification/
+      Handler: index.handler
+      Description: Process DynamoDB Stream events and send notifications
+      Events:
+        DynamoDBStream:
+          Type: DynamoDB
+          Properties:
+            Stream: !GetAtt ResultsTable.StreamArn
+            StartingPosition: LATEST
+            BatchSize: 10
+            MaximumBatchingWindowInSeconds: 5
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"dynamodb": {"NewImage": {"processingType": {"S": ["AGGREGATED"]}}}}'
+      Policies:
+        - DynamoDBStreamReadPolicy:
+            TableName: !Ref ResultsTable
+            StreamName:
+              !Select [3, !Split ["/", !GetAtt ResultsTable.StreamArn]]
+
   ##########################################################################
   # API GATEWAY
   ##########################################################################
