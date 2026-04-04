@@ -4,8 +4,11 @@ import {
   PutObjectCommand,
 } from "@aws-sdk/client-s3";
 import sharp from "sharp";
+import AWSXRay from "aws-xray-sdk-core";
 
-const s3Client = new S3Client({ region: process.env.AWS_REGION });
+const s3Client = AWSXRay.captureAWSv3Client(
+  new S3Client({ region: process.env.AWS_REGION }),
+);
 const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET_NAME;
 const PROCESSED_BUCKET = process.env.PROCESSED_BUCKET_NAME;
 

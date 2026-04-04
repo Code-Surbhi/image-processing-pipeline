@@ -3,5 +3,9 @@
   "version": "1.0.0",
   "description": "Detect labels in images using AWS Rekognition",
   "main": "index.js",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.702.0",
+    "aws-xray-sdk-core": "^3.10.1"
+  }
 }

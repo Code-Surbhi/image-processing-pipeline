@@ -6,6 +6,7 @@
   "type": "module",
   "dependencies": {
     "@aws-sdk/client-s3": "^3.702.0",
-    "@aws-sdk/s3-request-presigner": "^3.702.0"
+    "@aws-sdk/s3-request-presigner": "^3.702.0",
+    "aws-xray-sdk-core": "^3.10.1"
   }
 }

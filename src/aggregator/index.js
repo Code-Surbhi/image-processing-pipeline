@@ -4,8 +4,11 @@ import {
   PutCommand,
   QueryCommand,
 } from "@aws-sdk/lib-dynamodb";
+import AWSXRay from "aws-xray-sdk-core";
 
-const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const dynamoClient = AWSXRay.captureAWSv3Client(
+  new DynamoDBClient({ region: process.env.AWS_REGION }),
+);
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
 const RESULTS_TABLE = process.env.RESULTS_TABLE_NAME;
 

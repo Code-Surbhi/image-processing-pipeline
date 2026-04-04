@@ -2,10 +2,11 @@ import {
   RekognitionClient,
   DetectFacesCommand,
 } from "@aws-sdk/client-rekognition";
+import AWSXRay from "aws-xray-sdk-core";
 
-const rekognitionClient = new RekognitionClient({
-  region: process.env.AWS_REGION,
-});
+const rekognitionClient = AWSXRay.captureAWSv3Client(
+  new RekognitionClient({ region: process.env.AWS_REGION }),
+);
 const UPLOADS_BUCKET = process.env.UPLOADS_BUCKET_NAME;
 
 export const handler = async (event) => {
