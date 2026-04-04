@@ -231,6 +231,28 @@ Resources:
             StreamName:
               !Select [3, !Split ["/", !GetAtt ResultsTable.StreamArn]]
 
+  # Query API Lambda
+  QueryApiFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${AWS::StackName}-query-api-${Environment}"
+      CodeUri: src/query-api/
+      Handler: index.handler
+      Description: Query processing results from DynamoDB
+      Environment:
+        Variables:
+          RESULTS_TABLE_NAME: !Ref ResultsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref ResultsTable
+      Events:
+        ApiEvent:
+          Type: Api
+          Properties:
+            Path: /results/{imageId}
+            Method: GET
+            RestApiId: !Ref ImagePipelineApi
+
   ##########################################################################
   # API GATEWAY
   ##########################################################################
@@ -374,6 +396,10 @@ Outputs:
   PresignedUrlEndpoint:
     Description: Endpoint to request presigned upload URLs
     Value: !Sub "https://${ImagePipelineApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/upload-url"
+
+  QueryResultsEndpoint:
+    Description: Endpoint to query processing results by imageId
+    Value: !Sub "https://${ImagePipelineApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/results/{imageId}"
 
   PipelineStateMachineArn:
     Description: Step Functions State Machine ARN
