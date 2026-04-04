@@ -1,7 +1,11 @@
 {
   "name": "aggregator-lambda",
   "version": "1.0.0",
-  "description": "Aggregate results from parallel processing branches",
+  "description": "Aggregate results from parallel processing branches and write to DynamoDB",
   "main": "index.js",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.702.0",
+    "@aws-sdk/lib-dynamodb": "^3.702.0"
+  }
 }

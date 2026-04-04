@@ -96,6 +96,9 @@ Resources:
           KeyType: HASH
         - AttributeName: processingType
           KeyType: RANGE
+      TimeToLiveSpecification:
+        Enabled: true
+        AttributeName: ttl
 
   ##########################################################################
   # LAMBDA LAYERS
