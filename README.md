@@ -104,3 +104,9 @@ Building for Knowledge 🎯
 ## 📄 License
 
 MIT License - feel free to use this project for learning!
+
+## 🚀 CI/CD Status
+
+[![Deploy to AWS](https://github.com/Code-Surbhi/image-processing-pipeline/actions/workflows/deploy.yml/badge.svg)](https://github.com/Code-Surbhi/image-processing-pipeline/actions/workflows/deploy.yml)
+
+This pipeline auto-deploys on every push to `main`!
