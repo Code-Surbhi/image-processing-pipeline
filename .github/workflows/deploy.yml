@@ -23,6 +23,11 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Setup AWS SAM CLI
         uses: aws-actions/setup-sam@v2
         with:
@@ -35,12 +40,24 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # Placeholder - we'll add build/test/deploy steps in Phase 12
-      - name: Placeholder for build
-        run: echo "Build step will be added in Phase 12"
+      - name: SAM Validate
+        run: sam validate --lint
 
-      - name: Placeholder for tests
-        run: echo "Test step will be added in Phase 12"
+      - name: SAM Build
+        run: sam build --use-container
 
-      - name: Placeholder for deploy
-        run: echo "Deploy step will be added in Phase 12"
+      - name: SAM Deploy
+        run: |
+          sam deploy \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --stack-name ${{ env.SAM_STACK_NAME }} \
+            --capabilities CAPABILITY_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --resolve-s3 \
+            --parameter-overrides Environment=dev
+
+      - name: Output API Endpoint
+        run: |
+          echo "Deployment complete!"
+          sam list stack-outputs --stack-name ${{ env.SAM_STACK_NAME }}
