@@ -1,7 +1,10 @@
 {
   "name": "image-resize-lambda",
   "version": "1.0.0",
-  "description": "Resize images into multiple dimensions",
+  "description": "Resize images into multiple dimensions using sharp",
   "main": "index.js",
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.702.0"
+  }
 }

@@ -98,6 +98,16 @@ Resources:
           KeyType: RANGE
 
   ##########################################################################
+  # LAMBDA LAYERS
+  ##########################################################################
+
+  ##########################################################################
+  # LAMBDA LAYERS
+  ##########################################################################
+
+  #deleted
+
+  ##########################################################################
   # LAMBDA FUNCTIONS
   ##########################################################################
 
@@ -156,6 +166,7 @@ Resources:
         - RekognitionDetectOnlyPolicy: {}
 
   # Image Resize Lambda
+  # Image Resize Lambda
   ImageResizeFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -174,6 +185,8 @@ Resources:
             BucketName: !Ref UploadsBucket
         - S3CrudPolicy:
             BucketName: !Ref ProcessedBucket
+      Layers:
+        - arn:aws:lambda:ap-south-1:823151422906:layer:image-pipeline-sharp-layer-dev:3
 
   # Aggregator Lambda
   AggregatorFunction:
