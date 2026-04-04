@@ -63,6 +63,15 @@ Resources:
             AllowedOrigins:
               - "*"
             MaxAge: 3600
+      LifecycleConfiguration:
+        Rules:
+          - Id: TransitionToGlacierAfter30Days
+            Status: Enabled
+            Prefix: uploads/
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+            ExpirationInDays: 365 # Delete after 1 year
 
   # Processed bucket - stores resized images
   ProcessedBucket:
@@ -74,6 +83,14 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      IntelligentTieringConfigurations:
+        - Id: EntireBucket
+          Status: Enabled
+          Tierings:
+            - Days: 90
+              AccessTier: ARCHIVE_ACCESS
+            - Days: 180
+              AccessTier: DEEP_ARCHIVE_ACCESS
 
   ##########################################################################
   # DYNAMODB TABLE
